@@ -1,18 +1,67 @@
 from flask import Flask, request, jsonify
 import math
+import json
 
 app = Flask(__name__)
 
 def parse_embedding(value):
     if isinstance(value, list):
         return [float(x) for x in value]
+
+    if isinstance(value, dict):
+        data = value.get("data", [])
+        if data and isinstance(data, list):
+            first = data[0]
+            if isinstance(first, dict) and "embedding" in first:
+                return [float(x) for x in first["embedding"]]
+        if "embedding" in value and isinstance(value["embedding"], list):
+            return [float(x) for x in value["embedding"]]
+        return []
+
     if isinstance(value, str):
         value = value.strip()
-        if value.startswith("[") and value.endswith("]"):
-            value = value[1:-1]
         if not value:
             return []
-        return [float(x.strip()) for x in value.split(",")]
+
+        try:
+            parsed = json.loads(value)
+
+            if isinstance(parsed, list):
+                return [float(x) for x in parsed]
+
+            if isinstance(parsed, dict):
+                data = parsed.get("data", [])
+                if data and isinstance(data, list):
+                    first = data[0]
+                    if isinstance(first, dict) and "embedding" in first:
+                        return [float(x) for x in first["embedding"]]
+                if "embedding" in parsed and isinstance(parsed["embedding"], list):
+                    return [float(x) for x in parsed["embedding"]]
+        except Exception:
+            pass
+
+        if value.startswith("[") and value.endswith("]"):
+            value = value[1:-1]
+
+        return [float(x.strip()) for x in value.split(",") if x.strip()]
+
+    return []
+
+def parse_objectives(value):
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return []
+
     return []
 
 def cosine_similarity(a, b):
@@ -36,13 +85,19 @@ def match():
     article_title = data.get("article_title", "")
     article_description = data.get("article_description", "")
     article_embedding = parse_embedding(data.get("article_embedding", []))
-    objectives = data.get("objectives", [])
+    objectives = parse_objectives(data.get("objectives", []))
 
     best_match = None
     best_score = -1
 
     for item in objectives:
+        if not isinstance(item, dict):
+            continue
+
         record = item.get("Record", item)
+        if not isinstance(record, dict):
+            continue
+
         objective_embedding = parse_embedding(record.get("embedding", []))
         score = cosine_similarity(article_embedding, objective_embedding)
 
