@@ -76,6 +76,25 @@ def parse_objectives(value):
 
     return []
 
+def extract_record(item):
+    if not isinstance(item, dict):
+        return {}
+
+    # vorm 1: {"Record": {...}}
+    if isinstance(item.get("Record"), dict):
+        return item["Record"]
+
+    # vorm 2: {"data": {"Record": {...}}}
+    data = item.get("data")
+    if isinstance(data, dict) and isinstance(data.get("Record"), dict):
+        return data["Record"]
+
+    # vorm 3: {"data": {...record velden...}}
+    if isinstance(data, dict):
+        return data
+
+    return item
+
 def cosine_similarity(a, b):
     if not a or not b or len(a) != len(b):
         return 0.0
@@ -106,14 +125,11 @@ def match():
     best_score = -1
 
     first_item = objectives[0] if objectives and isinstance(objectives[0], dict) else None
-    first_record = first_item.get("Record", first_item) if first_item else None
+    first_record = extract_record(first_item) if first_item else None
     first_record_embedding = parse_embedding(first_record.get("embedding", [])) if isinstance(first_record, dict) else []
 
     for item in objectives:
-        if not isinstance(item, dict):
-            continue
-
-        record = item.get("Record", item)
+        record = extract_record(item)
         if not isinstance(record, dict):
             continue
 
@@ -133,7 +149,6 @@ def match():
         "objective_id": str(best_match.get("id")) if best_match else None,
         "learning_objective": best_match.get("leerdoel") if best_match else None,
         "similarity_score": round(best_score, 4) if best_match else 0,
-
         "debug": {
             "article_embedding_length": len(article_embedding),
             "objectives_count": len(objectives),
