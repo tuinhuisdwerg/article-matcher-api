@@ -6,16 +6,25 @@ app = Flask(__name__)
 
 def parse_embedding(value):
     if isinstance(value, list):
-        return [float(x) for x in value]
+        try:
+            return [float(x) for x in value]
+        except Exception:
+            return []
 
     if isinstance(value, dict):
         data = value.get("data", [])
         if data and isinstance(data, list):
             first = data[0]
             if isinstance(first, dict) and "embedding" in first:
-                return [float(x) for x in first["embedding"]]
+                try:
+                    return [float(x) for x in first["embedding"]]
+                except Exception:
+                    return []
         if "embedding" in value and isinstance(value["embedding"], list):
-            return [float(x) for x in value["embedding"]]
+            try:
+                return [float(x) for x in value["embedding"]]
+            except Exception:
+                return []
         return []
 
     if isinstance(value, str):
@@ -43,7 +52,10 @@ def parse_embedding(value):
         if value.startswith("[") and value.endswith("]"):
             value = value[1:-1]
 
-        return [float(x.strip()) for x in value.split(",") if x.strip()]
+        try:
+            return [float(x.strip()) for x in value.split(",") if x.strip()]
+        except Exception:
+            return []
 
     return []
 
@@ -84,11 +96,18 @@ def match():
 
     article_title = data.get("article_title", "")
     article_description = data.get("article_description", "")
-    article_embedding = parse_embedding(data.get("article_embedding", []))
-    objectives = parse_objectives(data.get("objectives", []))
+    article_embedding_raw = data.get("article_embedding", [])
+    objectives_raw = data.get("objectives", [])
+
+    article_embedding = parse_embedding(article_embedding_raw)
+    objectives = parse_objectives(objectives_raw)
 
     best_match = None
     best_score = -1
+
+    first_item = objectives[0] if objectives and isinstance(objectives[0], dict) else None
+    first_record = first_item.get("Record", first_item) if first_item else None
+    first_record_embedding = parse_embedding(first_record.get("embedding", [])) if isinstance(first_record, dict) else []
 
     for item in objectives:
         if not isinstance(item, dict):
@@ -113,7 +132,17 @@ def match():
         "article_description": article_description,
         "objective_id": str(best_match.get("id")) if best_match else None,
         "learning_objective": best_match.get("leerdoel") if best_match else None,
-        "similarity_score": round(best_score, 4) if best_match else 0
+        "similarity_score": round(best_score, 4) if best_match else 0,
+
+        "debug": {
+            "article_embedding_length": len(article_embedding),
+            "objectives_count": len(objectives),
+            "first_item_keys": list(first_item.keys()) if isinstance(first_item, dict) else None,
+            "first_record_keys": list(first_record.keys()) if isinstance(first_record, dict) else None,
+            "first_record_embedding_length": len(first_record_embedding),
+            "article_embedding_raw_type": str(type(article_embedding_raw).__name__),
+            "objectives_raw_type": str(type(objectives_raw).__name__)
+        }
     })
 
 if __name__ == "__main__":
